@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-200mb} --maxmemory-policy ${REDIS_POLICY:-allkeys-lru}
+
+  generador_respuestas:
+    build: ./generador_respuestas
+    container_name: generador_respuestas
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./datos:/app/datos
+
+  servicio_cache:
+    build: ./servicio_cache
+    container_name: servicio_cache
+    ports:
+      - "8002:8002"
+    depends_on:
+      - redis
+      - generador_respuestas
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GENERADOR_URL=http://generador_respuestas:8001
+      - TTL_SEGUNDOS=${TTL_SEGUNDOS:-60}
+
+  almacenamiento_metricas:
+    build: ./almacenamiento_metricas
+    container_name: almacenamiento_metricas
+    ports:
+      - "8003:8003"
+
+  generador_trafico:
+    build: ./generador_trafico
+    container_name: generador_trafico
+    depends_on:
+      - servicio_cache
+      - almacenamiento_metricas
+    environment:
+      - CACHE_URL=http://servicio_cache:8002
+      - METRICAS_URL=http://almacenamiento_metricas:8003
+      - DISTRIBUCION=${DISTRIBUCION:-zipf}
+      - TOTAL_CONSULTAS=${TOTAL_CONSULTAS:-1000}
+      - INTERVALO_SEGUNDOS=${INTERVALO_SEGUNDOS:-0.1}
