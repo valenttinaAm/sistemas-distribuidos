@@ -54,11 +54,24 @@ def generar_consulta() -> tuple:
 async def enviar_consulta(cliente: httpx.AsyncClient, tipo: str, endpoint: str, zona: str):
     try:
         inicio = time.time()
-        respuesta = await cliente.get(f"{CACHE_URL}{endpoint}", timeout=30)
-        datos = respuesta.json()
+        url = f"{CACHE_URL}{endpoint}"
+
+        respuesta = await cliente.get(url, timeout=30)
         latencia = (time.time() - inicio) * 1000
 
-        #guardamos cada evento para analizar después hit rate y latencias
+        if respuesta.status_code != 200:
+            print(f"Error HTTP {respuesta.status_code} en consulta {tipo} zona {zona}: {respuesta.text}")
+            return
+
+        try:
+            datos = respuesta.json()
+        except Exception as e:
+            print(f"Respuesta no JSON en consulta {tipo} zona {zona}")
+            print(f"URL: {url}")
+            print(f"Texto recibido: {respuesta.text}")
+            print(f"Error: {e}")
+            return
+
         evento = {
             "tipo": "hit" if datos.get("cache_hit") else "miss",
             "consulta": tipo.upper(),
@@ -68,9 +81,15 @@ async def enviar_consulta(cliente: httpx.AsyncClient, tipo: str, endpoint: str, 
             "clave": datos.get("clave", ""),
             "timestamp": time.time()
         }
-        #este delay controla la tasa de consultas (más chico = mas carga)
 
-        await cliente.post(f"{METRICAS_URL}/registrar", json=evento, timeout=10)
+        respuesta_metricas = await cliente.post(
+            f"{METRICAS_URL}/registrar",
+            json=evento,
+            timeout=10
+        )
+
+        if respuesta_metricas.status_code != 200:
+            print(f"Error registrando métricas: {respuesta_metricas.status_code} - {respuesta_metricas.text}")
 
     except Exception as e:
         print(f"Error en consulta {tipo} zona {zona}: {e}")

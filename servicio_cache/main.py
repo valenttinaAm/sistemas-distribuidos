@@ -4,6 +4,7 @@ import httpx
 import json
 import time
 import os
+import asyncio
 
 app = FastAPI()
 
@@ -23,9 +24,20 @@ def generar_clave(tipo: str, zona_id: str, params: dict) -> str:
     return f"{tipo}:{zona_id}:{params_str}"
 
 async def consultar_generador(endpoint: str) -> dict:
+    url = f"{GENERADOR_URL}{endpoint}"
+
     async with httpx.AsyncClient() as client:
-        respuesta = await client.get(f"{GENERADOR_URL}{endpoint}", timeout=30)
-        return respuesta.json()
+        for intento in range(5):
+            try:
+                respuesta = await client.get(url, timeout=30)
+                respuesta.raise_for_status()
+                return respuesta.json()
+            except httpx.ConnectError:
+                if intento == 4:
+                    raise
+                await asyncio.sleep(1)
+            except httpx.HTTPStatusError:
+                raise
 
 @app.get("/consulta/q1/{zona_id}")
 async def consulta_q1(zona_id: str, confidence_min: float = 0.0):

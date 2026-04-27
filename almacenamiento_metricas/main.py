@@ -6,7 +6,7 @@ import json
 
 app = FastAPI()
 
-# ista en memoria donde vamos guardando los eventos que llegan desde el sistema
+# Lista en memoria donde vamos guardando los eventos que llegan desde el sistema
 eventos = []
 
 class Evento(BaseModel):
