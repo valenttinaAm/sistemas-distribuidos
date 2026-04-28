@@ -5,7 +5,8 @@ import os
 
 app = FastAPI()
 
-# Definimos zonas manualmente para que coincidan con el generador de tráfico
+#definimos las zonas que vamos a usar en las consultas
+#esto lo dejamos fijo pra q coincida con el generador de trafico
 ZONAS = {
     "Z1": {"lat_min": -33.445, "lat_max": -33.420, "lon_min": -70.640, "lon_max": -70.600, "nombre": "Providencia"},
     "Z2": {"lat_min": -33.420, "lat_max": -33.390, "lon_min": -70.600, "lon_max": -70.550, "nombre": "Las Condes"},
@@ -15,7 +16,8 @@ ZONAS = {
 }
 
 
-# Aproximamos el área de cada zona en km²
+#aca calculamos el area aproximada de cada zona
+#no es exacto pero para el experimento sirve:)
 def calcular_area_km2(zona: dict) -> float:
     lat_diff = abs(zona["lat_max"] - zona["lat_min"]) * 111
     lon_diff = abs(zona["lon_max"] - zona["lon_min"]) * 111 * np.cos(
@@ -26,7 +28,7 @@ def calcular_area_km2(zona: dict) -> float:
 
 AREAS_KM2 = {zona_id: calcular_area_km2(zona) for zona_id, zona in ZONAS.items()}
 
-# Guardamos los datos ya filtrados por zona para no recalcular en cada request
+#guardamos los datos separados por zona para no recalcular filtros todo el rato
 datos_por_zona = {}
 
 
@@ -38,7 +40,7 @@ def validar_zona(zona_id: str):
 def cargar_datos():
     ruta = "/app/datos/edificios.csv"
 
-    # Si no hay dataset, generamos datos sintéticos para poder probar el sistema
+    #si no existe el archivo generamos datos falsos pa que el sistema no muera
     if not os.path.exists(ruta):
         print("ADVERTENCIA: dataset no encontrado, generando datos sintéticos")
         generar_datos_sinteticos()
@@ -51,7 +53,7 @@ def cargar_datos():
             (df["latitude"] >= zona["lat_min"]) & (df["latitude"] <= zona["lat_max"]) &
             (df["longitude"] >= zona["lon_min"]) & (df["longitude"] <= zona["lon_max"])
         )
-
+        #dejamos solo lo que necesitamos
         datos_por_zona[zona_id] = df[filtro][
             ["latitude", "longitude", "area_in_meters", "confidence"]
         ].to_dict("records")
@@ -61,7 +63,7 @@ def cargar_datos():
 
 def generar_datos_sinteticos():
     np.random.seed(42)
-
+    #generamos datos random dentro de cada zona
     for zona_id, zona in ZONAS.items():
         n = np.random.randint(500, 2000)
 
@@ -75,11 +77,10 @@ def generar_datos_sinteticos():
             for _ in range(n)
         ]
 
-
+#cargamos datos apenas levanta el servicio
 cargar_datos()
 
 
-# Q1: Conteo de edificios
 @app.get("/q1/{zona_id}")
 def q1_conteo(zona_id: str, confidence_min: float = 0.0):
     validar_zona(zona_id)
@@ -94,7 +95,6 @@ def q1_conteo(zona_id: str, confidence_min: float = 0.0):
     }
 
 
-# Q2: Área promedio y total
 @app.get("/q2/{zona_id}")
 def q2_area(zona_id: str, confidence_min: float = 0.0):
     validar_zona(zona_id)
@@ -123,7 +123,6 @@ def q2_area(zona_id: str, confidence_min: float = 0.0):
     }
 
 
-# Q3: Densidad por km²
 @app.get("/q3/{zona_id}")
 def q3_densidad(zona_id: str, confidence_min: float = 0.0):
     validar_zona(zona_id)
@@ -132,7 +131,7 @@ def q3_densidad(zona_id: str, confidence_min: float = 0.0):
 
     if area <= 0:
         raise HTTPException(status_code=500, detail=f"Área inválida para zona {zona_id}")
-
+    #reutilizamos q1 pa no repetir logica
     conteo = q1_conteo(zona_id, confidence_min)["conteo"]
     densidad = conteo / area
 
@@ -143,7 +142,6 @@ def q3_densidad(zona_id: str, confidence_min: float = 0.0):
     }
 
 
-# Q4: Comparación entre dos zonas
 @app.get("/q4/{zona_a}/{zona_b}")
 def q4_comparar(zona_a: str, zona_b: str, confidence_min: float = 0.0):
     validar_zona(zona_a)
@@ -162,7 +160,6 @@ def q4_comparar(zona_a: str, zona_b: str, confidence_min: float = 0.0):
     }
 
 
-# Q5: Distribución de confianza
 @app.get("/q5/{zona_id}")
 def q5_distribucion(zona_id: str, bins: int = 5):
     validar_zona(zona_id)
@@ -171,7 +168,7 @@ def q5_distribucion(zona_id: str, bins: int = 5):
         raise HTTPException(status_code=400, detail="El número de bins debe ser mayor que 0")
 
     scores = [float(r["confidence"]) for r in datos_por_zona.get(zona_id, [])]
-
+    #armamos una especie de histograma pa ver como se distribuye el confidence
     conteos, bordes = np.histogram(scores, bins=bins, range=(0, 1))
 
     distribucion = [
