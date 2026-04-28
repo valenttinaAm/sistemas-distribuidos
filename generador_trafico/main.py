@@ -4,7 +4,7 @@ import asyncio
 import time
 import os
 import random
-#estas urls vienen desde docker-compose para no hardcodear direcciones
+#estas urls vienen desde docker-compose para no dejar cosas fijas en el codigo
 CACHE_URL = os.getenv("CACHE_URL", "http://localhost:8002")
 METRICAS_URL = os.getenv("METRICAS_URL", "http://localhost:8003")
 
@@ -19,7 +19,6 @@ INTERVALO_SEGUNDOS = float(os.getenv("INTERVALO_SEGUNDOS", 0.1))
 
 #con zipf algunas zonas se repiten mucho mas que otras(simula uso real)
 def generar_zona_zipf() -> str:
-    #con zipf hacemos que algunas zonas se repitan más, como pasaría en zonas de alta demanda
     pesos = np.array([1/i**ZIPF_PARAMETRO for i in range(1, len(ZONAS)+1)])
     pesos = pesos / pesos.sum()
     return np.random.choice(ZONAS, p=pesos)
