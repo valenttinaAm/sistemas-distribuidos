@@ -52,14 +52,29 @@ async def registrar_metrica(cliente, evento):
         print(f"No se pudo registrar metrica: {error}")
 
 
-def enviar_dlq(producer, mensaje, motivo):
+async def enviar_dlq(cliente, producer, mensaje, motivo):
     mensaje["ultimo_error"] = motivo
     mensaje["timestamp_dlq"] = time.time()
 
     producer.send(TOPICO_DLQ, mensaje)
     producer.flush()
 
+    evento_dlq = {
+        "tipo": "dlq",
+        "consulta": mensaje.get("consulta", ""),
+        "zona_id": mensaje.get("zona_id", ""),
+        "latencia_ms": 0,
+        "cache_hit": False,
+        "clave": "",
+        "timestamp": time.time(),
+        "retry_count": mensaje.get("retry_count", 0),
+        "mensaje_id": mensaje.get("id", "")
+    }
+
+    await registrar_metrica(cliente, evento_dlq)
+
     print(f"Mensaje enviado a DLQ: {mensaje.get('id')}")
+
 
 
 async def procesar_retry(cliente, producer, mensaje):
@@ -79,7 +94,7 @@ async def procesar_retry(cliente, producer, mensaje):
             mensaje["retry_count"] = mensaje.get("retry_count", 0) + 1
 
             if mensaje["retry_count"] > MAX_REINTENTOS:
-                enviar_dlq(producer, mensaje, f"http_{respuesta.status_code}")
+                await enviar_dlq(cliente, producer, mensaje, f"http_{respuesta.status_code}")
                 return
 
             producer.send(TOPICO_RETRY, mensaje)
@@ -96,7 +111,9 @@ async def procesar_retry(cliente, producer, mensaje):
             "latencia_ms": latencia_total,
             "cache_hit": datos.get("cache_hit", False),
             "clave": datos.get("clave", ""),
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "retry_count": mensaje.get("retry_count", 0),
+            "mensaje_id": mensaje.get("id", "")
         }
 
         await registrar_metrica(cliente, evento)
@@ -107,7 +124,7 @@ async def procesar_retry(cliente, producer, mensaje):
         mensaje["retry_count"] = mensaje.get("retry_count", 0) + 1
 
         if mensaje["retry_count"] > MAX_REINTENTOS:
-            enviar_dlq(producer, mensaje, str(error))
+            await enviar_dlq(cliente, producer, mensaje, str(error))
         else:
             mensaje["ultimo_error"] = str(error)
             mensaje["timestamp_retry"] = time.time()
