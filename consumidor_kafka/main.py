@@ -46,27 +46,42 @@ def crear_producer():
         value_serializer=lambda v: json.dumps(v).encode("utf-8")
     )
 
-
-def enviar_a_retry_o_dlq(producer, mensaje, motivo):
-    mensaje["retry_count"] = mensaje.get("retry_count", 0) + 1
-    mensaje["ultimo_error"] = motivo
-    mensaje["timestamp_retry"] = time.time()
-
-    # si ya fallo muchas veces, lo dejamos en dlq
-    if mensaje["retry_count"] > MAX_REINTENTOS:
-        producer.send(TOPICO_DLQ, mensaje)
-        print(f"Mensaje enviado a DLQ: {mensaje.get('id')}")
-    else:
-        producer.send(TOPICO_RETRY, mensaje)
-        print(f"Mensaje enviado a retry {mensaje['retry_count']}/{MAX_REINTENTOS}: {mensaje.get('id')}")
-
-    producer.flush()
-
 async def registrar_metrica(cliente, evento):
     try:
         await cliente.post(f"{METRICAS_URL}/registrar", json=evento, timeout=10)
     except Exception as error:
         print(f"No se pudo registrar metrica: {error}")
+
+
+async def enviar_a_retry_o_dlq(cliente, producer, mensaje, motivo):
+    mensaje["retry_count"] = mensaje.get("retry_count", 0) + 1
+    mensaje["ultimo_error"] = motivo
+    mensaje["timestamp_retry"] = time.time()
+
+    #si es q fallo muchas veces, lo dejamos en dlq
+    if mensaje["retry_count"] > MAX_REINTENTOS:
+        producer.send(TOPICO_DLQ, mensaje)
+        producer.flush()
+
+        evento_dlq = {
+            "tipo": "dlq",
+            "consulta": mensaje.get("consulta", ""),
+            "zona_id": mensaje.get("zona_id", ""),
+            "latencia_ms": 0,
+            "cache_hit": False,
+            "clave": "",
+            "timestamp": time.time(),
+            "retry_count": mensaje.get("retry_count", 0),
+            "mensaje_id": mensaje.get("id", "")
+        }
+
+
+        await registrar_metrica(cliente, evento_dlq)
+        print(f"Mensaje enviado a DLQ: {mensaje.get('id')}")
+    else:
+        producer.send(TOPICO_RETRY, mensaje)
+        producer.flush()
+        print(f"Mensaje enviado a retry {mensaje['retry_count']}/{MAX_REINTENTOS}: {mensaje.get('id')}")
 
 
 async def procesar_mensaje(cliente, producer, mensaje):
@@ -80,7 +95,7 @@ async def procesar_mensaje(cliente, producer, mensaje):
         latencia_total = (time.time() - inicio) * 1000
 
         if respuesta.status_code != 200:
-            enviar_a_retry_o_dlq(producer, mensaje, f"http_{respuesta.status_code}")
+            await enviar_a_retry_o_dlq(cliente, producer, mensaje, f"http_{respuesta.status_code}")
             return
 
         datos = respuesta.json()
@@ -92,7 +107,9 @@ async def procesar_mensaje(cliente, producer, mensaje):
             "latencia_ms": datos.get("latencia_ms", latencia_total),
             "cache_hit": datos.get("cache_hit", False),
             "clave": datos.get("clave", ""),
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "retry_count": mensaje.get("retry_count", 0),
+            "mensaje_id": mensaje.get("id", "")
         }
 
         await registrar_metrica(cliente, evento)
@@ -100,7 +117,7 @@ async def procesar_mensaje(cliente, producer, mensaje):
         print(f"Procesada {mensaje.get('consulta')} zona {mensaje.get('zona_id')} retry {mensaje.get('retry_count', 0)}")
 
     except Exception as error:
-        enviar_a_retry_o_dlq(producer, mensaje, str(error))
+       await enviar_a_retry_o_dlq(cliente, producer, mensaje, str(error))
 
 
 async def ejecutar_consumidor():
