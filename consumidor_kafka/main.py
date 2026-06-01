@@ -62,4 +62,60 @@ def enviar_a_retry_o_dlq(producer, mensaje, motivo):
 
     producer.flush()
 
+async def registrar_metrica(cliente, evento):
+    try:
+        await cliente.post(f"{METRICAS_URL}/registrar", json=evento, timeout=10)
+    except Exception as error:
+        print(f"No se pudo registrar metrica: {error}")
+
+
+async def procesar_mensaje(cliente, producer, mensaje):
+    inicio = time.time()
+
+    try:
+        endpoint = mensaje["endpoint"]
+        url = f"{CACHE_URL}{endpoint}"
+
+        respuesta = await cliente.get(url, timeout=20)
+        latencia_total = (time.time() - inicio) * 1000
+
+        if respuesta.status_code != 200:
+            enviar_a_retry_o_dlq(producer, mensaje, f"http_{respuesta.status_code}")
+            return
+
+        datos = respuesta.json()
+
+        evento = {
+            "tipo": "procesada_kafka",
+            "consulta": mensaje.get("consulta", ""),
+            "zona_id": mensaje.get("zona_id", ""),
+            "latencia_ms": datos.get("latencia_ms", latencia_total),
+            "cache_hit": datos.get("cache_hit", False),
+            "clave": datos.get("clave", ""),
+            "timestamp": time.time()
+        }
+
+        await registrar_metrica(cliente, evento)
+
+        print(f"Procesada {mensaje.get('consulta')} zona {mensaje.get('zona_id')} retry {mensaje.get('retry_count', 0)}")
+
+    except Exception as error:
+        enviar_a_retry_o_dlq(producer, mensaje, str(error))
+
+
+async def ejecutar_consumidor():
+    consumer = crear_consumer()
+    producer = crear_producer()
+
+    print("Consumidor principal escuchando consultas...")
+
+    async with httpx.AsyncClient() as cliente:
+        for mensaje_kafka in consumer:
+            mensaje = mensaje_kafka.value
+            await procesar_mensaje(cliente, producer, mensaje)
+
+
+if __name__ == "__main__":
+    asyncio.run(ejecutar_consumidor())
+
 
