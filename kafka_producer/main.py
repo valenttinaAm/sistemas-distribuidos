@@ -6,7 +6,7 @@ import random
 import json
 import uuid
 
-#aca ya no llamamos directo al cache como en la tarea 1 ahora lo q hicimo es q mandamos las consultas a kafka para que los consumidores las procesen despues porsia 
+#rafa aca ya no mandamos la consulta directo al cache como en la tarea 1 ahora la publicamos en kafka y despues la toma un consumidor porsia no modifiques 
 
 KAFKA_SERVIDOR = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 TOPICO_CONSULTAS = os.getenv("TOPICO_CONSULTAS", "consultas")
@@ -21,93 +21,19 @@ INTERVALO_SEGUNDOS = float(os.getenv("INTERVALO_SEGUNDOS", 0.1))
 
 
 def crear_producer():
-    # cachamos q el kafka a veces se demora un poco en partir con docker asi q por eso reintentamos
+    #kafka a veces se demora en levantar con docker porsia
     for intento in range(10):
         try:
             producer = KafkaProducer(
                 bootstrap_servers=KAFKA_SERVIDOR,
                 value_serializer=lambda v: json.dumps(v).encode("utf-8")
             )
-            print("Conectado a Kafka")
+            print("Producer conectado a Kafka")
             return producer
-        except Exception as error:
-            print(f"Kafka aun no esta listo, intento {intento + 1}/10")
+        except Exception:
+            print(f"Esperando Kafka... intento {intento + 1}/10")
             time.sleep(3)
 
     raise Exception("No se pudo conectar a Kafka")
-
-
-def generar_zona_zipf():
-    #esto es lo mismo de la tarea 1: algunas zonas aparecen mas que otras
-    pesos = np.array([1 / i**ZIPF_PARAMETRO for i in range(1, len(ZONAS) + 1)])
-    pesos = pesos / pesos.sum()
-    return np.random.choice(ZONAS, p=pesos)
-
-
-def generar_zona_uniforme():
-    return random.choice(ZONAS)
-
-
-def generar_zona():
-    if DISTRIBUCION == "zipf":
-        return generar_zona_zipf()
-    return generar_zona_uniforme()
-
-
-def generar_consulta():
-    tipo = random.choice(CONSULTAS)
-    confidence_min = round(random.choice([0.0, 0.5, 0.7, 0.9]), 1)
-    zona = generar_zona()
-
-    if tipo == "q1":
-        endpoint = f"/consulta/q1/{zona}?confidence_min={confidence_min}"
-    elif tipo == "q2":
-        endpoint = f"/consulta/q2/{zona}?confidence_min={confidence_min}"
-    elif tipo == "q3":
-        endpoint = f"/consulta/q3/{zona}?confidence_min={confidence_min}"
-    elif tipo == "q4":
-        zona_b = random.choice([z for z in ZONAS if z != zona])
-        endpoint = f"/consulta/q4/{zona}/{zona_b}?confidence_min={confidence_min}"
-    else:
-        bins = random.choice([5, 10])
-        endpoint = f"/consulta/q5/{zona}?bins={bins}"
-
-    mensaje = {
-        "id": str(uuid.uuid4()),
-        "tipo": tipo,
-        "consulta": tipo.upper(),
-        "zona_id": zona,
-        "endpoint": endpoint,
-        "retry_count": 0,
-        "timestamp_creacion": time.time()
-    }
-
-    return mensaje
-
-
-def ejecutar_productor():
-    print(f"Iniciando producer Kafka con {TOTAL_CONSULTAS} consultas ({DISTRIBUCION})")
-    producer = crear_producer()
-
-    for i in range(TOTAL_CONSULTAS):
-        mensaje = generar_consulta()
-
-        producer.send(TOPICO_CONSULTAS, mensaje)
-
-        #lo dejamos impreso para ver en el video que se estan publicando consultas
-        if (i + 1) % 100 == 0:
-            print(f"Consultas publicadas en Kafka: {i + 1}/{TOTAL_CONSULTAS}")
-
-        time.sleep(INTERVALO_SEGUNDOS)
-
-    producer.flush()
-    producer.close()
-
-    print("Producer terminado, consultas enviadas al topico principal")
-
-
-if __name__ == "__main__":
-    ejecutar_productor()
-
 
 
