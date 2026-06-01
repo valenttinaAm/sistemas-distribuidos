@@ -1,4 +1,6 @@
-# consumidor de reintentos
-# procesa mensajes que fallaron anteriormente
-
-print("retry consumer")
+from kafka import KafkaConsumer, KafkaProducer
+import httpx
+import json
+import os
+import time
+import asyncio
