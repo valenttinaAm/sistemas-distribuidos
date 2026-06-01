@@ -108,3 +108,11 @@ def ejecutar_productor():
 
 if __name__ == "__main__":
     ejecutar_productor()
+
+
+.
+.
+.
+.
+.
+
