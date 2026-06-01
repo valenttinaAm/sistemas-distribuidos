@@ -37,3 +37,20 @@ def crear_producer():
     raise Exception("No se pudo conectar a Kafka")
 
 
+def generar_zona_zipf():
+    #misma idea de la tarea 1: algunas zonas aparecen mas que otras
+    pesos = np.array([1 / i**ZIPF_PARAMETRO for i in range(1, len(ZONAS) + 1)])
+    pesos = pesos / pesos.sum()
+    return np.random.choice(ZONAS, p=pesos)
+
+
+def generar_zona_uniforme():
+    return random.choice(ZONAS)
+
+
+def generar_zona():
+    if DISTRIBUCION == "zipf":
+        return generar_zona_zipf()
+    return generar_zona_uniforme()
+
+
