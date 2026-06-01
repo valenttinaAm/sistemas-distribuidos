@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import pandas as pd
 import time
-import json
 
 app = FastAPI()
 
@@ -11,17 +10,18 @@ app = FastAPI()
 eventos = []
 
 class Evento(BaseModel):
-    tipo: str          
-    consulta: str      
-    zona_id: str
-    latencia_ms: float
-    cache_hit: bool
-    clave: str
+    tipo: str
+    consulta: str = ""
+    zona_id: str = ""
+    latencia_ms: float = 0
+    cache_hit: bool = False
+    clave: str = ""
     timestamp: float = None
 
-#esto es nuevo pra la tarea 2, los dejamos opcionales pa no romper lo anterior
+    #esto es nuevo para la tarea 2, lo dejamos opcional pa no romper lo anterior
     retry_count: int = 0
     mensaje_id: str = ""
+
 
 
 @app.post("/registrar")
