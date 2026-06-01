@@ -124,8 +124,3 @@ async def ejecutar_consumidor():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(ejecutar_consumidor())
-
-if                                    
-
-        a
-    a
