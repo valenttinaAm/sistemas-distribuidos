@@ -53,4 +53,55 @@ def generar_zona():
         return generar_zona_zipf()
     return generar_zona_uniforme()
 
+def generar_consulta():
+    tipo = random.choice(CONSULTAS)
+    confidence_min = round(random.choice([0.0, 0.5, 0.7, 0.9]), 1)
+    zona = generar_zona()
+
+    if tipo == "q1":
+        endpoint = f"/consulta/q1/{zona}?confidence_min={confidence_min}"
+    elif tipo == "q2":
+        endpoint = f"/consulta/q2/{zona}?confidence_min={confidence_min}"
+    elif tipo == "q3":
+        endpoint = f"/consulta/q3/{zona}?confidence_min={confidence_min}"
+    elif tipo == "q4":
+        zona_b = random.choice([z for z in ZONAS if z != zona])
+        endpoint = f"/consulta/q4/{zona}/{zona_b}?confidence_min={confidence_min}"
+    else:
+        bins = random.choice([5, 10])
+        endpoint = f"/consulta/q5/{zona}?bins={bins}"
+
+    return {
+        "id": str(uuid.uuid4()),
+        "tipo": tipo,
+        "consulta": tipo.upper(),
+        "zona_id": zona,
+        "endpoint": endpoint,
+        "retry_count": 0,
+        "timestamp_creacion": time.time()
+    }
+
+
+def ejecutar_productor():
+    print(f"Iniciando producer Kafka: {TOTAL_CONSULTAS} consultas con distribucion {DISTRIBUCION}")
+
+    producer = crear_producer()
+
+    for i in range(TOTAL_CONSULTAS):
+        mensaje = generar_consulta()
+        producer.send(TOPICO_CONSULTAS, mensaje)
+
+        if (i + 1) % 100 == 0:
+            print(f"Consultas publicadas: {i + 1}/{TOTAL_CONSULTAS}")
+
+        time.sleep(INTERVALO_SEGUNDOS)
+
+    producer.flush()
+    producer.close()
+
+    print("Producer terminado")
+
+
+if __name__ == "__main__":
+    ejecutar_productor()
 
