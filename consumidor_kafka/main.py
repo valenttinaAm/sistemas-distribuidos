@@ -1,4 +1,6 @@
-# consumidor principal de kafka
-# aca se leeran las consultas desde el topico principal
+from kafka import KafkaConsumer, KafkaProducer
+import httpx
+import json
+import os
+import time
 
-print("consumer kafka")
