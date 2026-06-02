@@ -62,7 +62,7 @@ def obtener_metricas():
     duracion = df["timestamp"].max() - df["timestamp"].min()
     throughput = total / duracion if duracion > 0 else 0
     
-       return {
+    return {
         "total_consultas": total,
         "hits": hits,
         "misses": misses,
