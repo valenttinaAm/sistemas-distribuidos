@@ -70,10 +70,7 @@ def generar_consulta():
     else:
         bins = random.choice([5, 10])
         endpoint = f"/consulta/q5/{zona}?bins={bins}"
-        
-    #simular mensaje invalido
-    if tipo == "q1" and ramdom.random() < 0.05:
-        endpoint = "/consulta/q_invalida/ZX?confidence_min=0.0"
+    
 
     return {
         "id": str(uuid.uuid4()),
