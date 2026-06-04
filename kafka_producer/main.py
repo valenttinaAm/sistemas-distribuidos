@@ -93,16 +93,29 @@ def ejecutar_productor():
         producer.send(TOPICO_CONSULTAS, mensaje)
 
         if (i + 1) % 100 == 0:
-            print(f"Consultas publicadas: {i + 1}/{TOTAL_CONSULTAS}")
-
-        time.sleep(INTERVALO_SEGUNDOS)
+            invalid_message = {
+                "id": "invalid-msg-1",
+                "tipo": "qX",          # tipo inexistente
+                "consulta": "QX",
+                "zona_id": "Z0",
+                "retry_count": 0,
+                "timestamp_creacion": time.time()
+            }
+            producer.send(TOPICO_CONSULTAS, invalid_message)
+            print("Mensaje inválido enviado al topic")
+    
+    if (i + 1) % 100 == 0:
+        print(f"Consultas publicadas: {i + 1}/{TOTAL_CONSULTAS}")
+   
+    time.sleep(INTERVALO_SEGUNDOS)
 
     producer.flush()
     producer.close()
-
     print("Producer terminado")
 
 
 if __name__ == "__main__":
     ejecutar_productor()
+
+
 
